@@ -8,17 +8,30 @@
 ```
 /workspace
 ├── db_migration_ido_module.sql    # SQL-миграция для создания таблиц БД
+├── README.md                       # Основная документация
 ├── backend/                        # Бэкенд (API, бизнес-логика)
-│   ├── api/                        # API endpoints
-│   ├── models/                     # Модели данных
-│   ├── services/                   # Бизнес-логика
-│   └── middleware/                 # Middleware (аутентификация, авторизация)
+│   ├── api/
+│   │   └── api.php                 # Единая точка входа API
+│   ├── config/
+│   │   └── ido_config.php          # Конфигурация модуля
+│   ├── middleware/
+│   │   └── AuthMiddleware.php      # Проверка прав доступа
+│   ├── models/
+│   │   ├── IdoProgramType.php      # Модель типов программ
+│   │   ├── IdoProgram.php          # Модель программ
+│   │   ├── IdoStudentProgram.php   # Модель записей студентов
+│   │   └── IdoAuditLog.php         # Модель журнала аудита
+│   └── services/
+│       ├── StudentSearchService.php # Поиск студентов в ЕИС
+│       └── ExportService.php        # Экспорт в XLSX/CSV
 ├── frontend/                       # Фронтенд (интерфейс пользователя)
-│   ├── components/                 # UI компоненты
-│   ├── pages/                      # Страницы модуля
-│   └── assets/                     # Статические файлы
+│   ├── pages/
+│   │   └── index.html              # Главная страница модуля
+│   └── assets/
+│       └── ido-app.js              # JavaScript приложение
 └── docs/                           # Документация
-    └── TECHNICAL_SPECIFICATION.md  # Техническое задание
+    ├── TECHNICAL_SPECIFICATION.md  # Техническое задание
+    └── db_migration_ido_module.sql # Копия миграции
 ```
 
 ## Требования к окружению
@@ -43,13 +56,38 @@
 mysql -u username -p database_name < db_migration_ido_module.sql
 ```
 
-### 2. Бэкенд
+**Важно:** Миграция предполагает, что в БД уже существуют таблицы ЕИС:
+- `persons` — физические лица
+- `stud_cards` — карточки студентов
+- `stud_groups` — учебные группы
+- `faculties` — факультеты
+- `users` — пользователи системы
 
-*(Раздел будет заполнен при разработке)*
+### 2. Настройка веб-сервера
 
-### 3. Фронтенд
+Разместите файлы проекта в директории веб-сервера:
+- `backend/` — бэкенд (PHP)
+- `frontend/pages/index.html` — точка входа интерфейса
 
-*(Раздел будет заполнен при разработке)*
+Убедитесь, что PHP имеет доступ к сессиям и может подключаться к БД ЕИС.
+
+### 3. Интеграция с ЕИС
+
+Отредактируйте файл `backend/api/api.php`, указав правильный путь к подключению БД:
+
+```php
+require_once __DIR__ . '/../../includes/db_connect.php'; // Ваш путь к подключению ЕИС
+```
+
+Или создайте собственное подключение в начале файла.
+
+### 4. Настройка прав доступа
+
+Назначьте роли пользователям через существующий механизм ЕИС (таблицы `user_roles`, `access_operator`):
+- `ido_admin` — администратор ИДО
+- `ido_operator` — оператор ИДО
+- `dekanat_read` — сотрудник деканата
+- `analyst` — аналитик / руководство
 
 ## Ролевая модель
 
@@ -134,7 +172,67 @@ mysql -u username -p database_name < db_migration_ido_module.sql
 
 ## API Endpoints
 
-*(Будет заполнено при разработке бэкенда)*
+Все запросы к API выполняются через `backend/api/api.php` с параметром `action`.
+
+### Справочники
+
+| Действие | Метод | Параметры | Описание |
+|----------|-------|-----------|----------|
+| `program_types_list` | GET | `all=1` (опционально) | Список типов программ |
+| `program_type_create` | POST | JSON: `{name, code, hours_min, active}` | Создать тип |
+| `program_type_update` | POST | JSON: `{id, name, code, hours_min, active}` | Обновить тип |
+| `program_type_delete` | GET | `id` | Мягкое удаление типа |
+| `programs_list` | GET | `type_id`, `all=1` | Список программ |
+| `program_create` | POST | JSON: `{type_id, code, name, hours, doc_template, active}` | Создать программу |
+| `program_update` | POST | JSON: `{id, type_id, code, name, hours, doc_template, active}` | Обновить программу |
+| `program_delete` | GET | `id` | Мягкое удаление программы |
+
+### Программы студентов
+
+| Действие | Метод | Параметры | Описание |
+|----------|-------|-----------|----------|
+| `student_programs_list` | GET | `person_id` | Программы студента |
+| `student_program_create` | POST | JSON: `{stud_id, person_id, program_id, status, start_date, end_date, doc_number, doc_date, comment}` | Добавить запись |
+| `student_program_update` | POST | JSON: `{id, ...поля для обновления}` | Обновить запись |
+| `student_program_delete` | GET | `id` | Удалить запись |
+
+### Поиск и отчёты
+
+| Действие | Метод | Параметры | Описание |
+|----------|-------|-----------|----------|
+| `students_search` | GET | `q`, `nzk`, `group_id`, `faculty_id`, `course` | Поиск студентов |
+| `report_data` | GET | `date_from`, `date_to`, `faculty_id`, `group_id`, `type_ids`, `statuses`, `has_document` | Данные отчёта |
+| `report_export` | GET | `format=xlsx\|csv`, + фильтры отчёта | Экспорт отчёта |
+
+### Аудит
+
+| Действие | Метод | Параметры | Описание |
+|----------|-------|-----------|----------|
+| `audit_log` | GET | `user_id`, `date_from`, `date_to`, `action_filter` | Журнал изменений |
+
+### Примеры запросов
+
+**Поиск студентов:**
+```javascript
+fetch('../backend/api/api.php?action=students_search&q=Иванов')
+  .then(r => r.json())
+  .then(data => console.log(data));
+```
+
+**Добавление программы студенту:**
+```javascript
+fetch('../backend/api/api.php?action=student_program_create', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({
+    stud_id: 123,
+    person_id: 456,
+    program_id: 7,
+    status: 1,
+    start_date: '2024-01-15'
+  })
+});
+```
 
 ## Форматы экспорта
 

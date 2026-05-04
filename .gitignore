@@ -1,1 +1,33 @@
-Nothing should be ignored based on the provided file changes, as they consist only of source/config files (.md, .sql) without any build artifacts, dependencies, or temporary files.
+```php
+# Dependencies
+vendor/
+
+# Logs
+*.log
+logs/
+runtime/logs/
+
+# Environment
+.env
+.env.local
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+build/
+dist/
+*.phar
+
+# Cache
+.cache/
+.tmp/
+```
